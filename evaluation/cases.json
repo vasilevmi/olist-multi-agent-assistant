@@ -1,0 +1,281 @@
+{
+  "dataset": "Olist Brazilian E-Commerce",
+  "version": 1,
+  "rules": {
+    "revenue": "sum(order_items.price) только для delivered-заказов, freight_value не включён",
+    "delayed": "order_delivered_customer_date > order_estimated_delivery_date",
+    "negative_review": "review_score <= 2",
+    "rating_rank_min_reviews": 100,
+    "region_rank_min_orders": 100,
+    "seller_delay_min_orders": 20
+  },
+  "cases": [
+    {
+      "id": "D001",
+      "type": "deterministic",
+      "question": "Какая категория имеет самый высокий средний рейтинг среди категорий минимум со 100 отзывами?",
+      "expected": {
+        "required_tools": ["get_category_rating_ranking"],
+        "assertions": [
+          {"tool": "get_category_rating_ranking", "path": "categories.0.category_name", "operator": "eq", "value": "books_general_interest"},
+          {"tool": "get_category_rating_ranking", "path": "categories.0.average_score", "operator": "approx", "value": 4.4626, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D002",
+      "type": "deterministic",
+      "question": "Какой продавец получил наибольшую выручку?",
+      "expected": {
+        "required_tools": ["get_top_sellers"],
+        "assertions": [
+          {"tool": "get_top_sellers", "path": "sellers.0.seller_id", "operator": "eq", "value": "4869f7a5dfa277a7dca6462dcf3b52b2"},
+          {"tool": "get_top_sellers", "path": "sellers.0.total_revenue", "operator": "approx", "value": 226987.93, "tolerance": 0.01}
+        ]
+      }
+    },
+    {
+      "id": "D003",
+      "type": "deterministic",
+      "question": "У каких продавцов доля задержанных заказов выше 20 процентов при минимуме 20 доставленных заказов?",
+      "expected": {
+        "required_tools": ["find_sellers_by_delay_rate"],
+        "assertions": [
+          {"tool": "find_sellers_by_delay_rate", "path": "count", "operator": "eq", "value": 28},
+          {"tool": "find_sellers_by_delay_rate", "path": "sellers.0.seller_id", "operator": "eq", "value": "821fb029fc6e495ca4f08a35d51e53a5"}
+        ]
+      }
+    },
+    {
+      "id": "D004",
+      "type": "deterministic",
+      "question": "Какая категория имеет наибольшую долю плохих отзывов среди категорий минимум со 100 отзывами?",
+      "expected": {
+        "required_tools": ["get_category_negative_review_ranking"],
+        "assertions": [
+          {"tool": "get_category_negative_review_ranking", "path": "categories.0.category_name", "operator": "eq", "value": "fashion_male_clothing"},
+          {"tool": "get_category_negative_review_ranking", "path": "categories.0.negative_percentage", "operator": "approx", "value": 26.13, "tolerance": 0.01}
+        ]
+      }
+    },
+    {
+      "id": "D005",
+      "type": "deterministic",
+      "question": "В каком регионе среднее время доставки самое большое среди регионов минимум со 100 заказами?",
+      "expected": {
+        "required_tools": ["get_region_delivery_ranking"],
+        "assertions": [
+          {"tool": "get_region_delivery_ranking", "path": "ranking_metric", "operator": "eq", "value": "average_delivery_days"},
+          {"tool": "get_region_delivery_ranking", "path": "regions.0.region", "operator": "eq", "value": "AM"},
+          {"tool": "get_region_delivery_ranking", "path": "regions.0.average_delivery_days", "operator": "approx", "value": 26.43, "tolerance": 0.01}
+        ]
+      }
+    },
+    {
+      "id": "D006",
+      "type": "deterministic",
+      "question": "Какая доля заказов была доставлена позже ожидаемой даты?",
+      "expected": {
+        "required_tools": ["get_delivery_statistics"],
+        "assertions": [
+          {"tool": "get_delivery_statistics", "path": "total_delivered_orders", "operator": "eq", "value": 96470},
+          {"tool": "get_delivery_statistics", "path": "delayed_orders", "operator": "eq", "value": 7826},
+          {"tool": "get_delivery_statistics", "path": "delayed_percentage", "operator": "approx", "value": 8.1124, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D007",
+      "type": "deterministic",
+      "question": "Какие категории дают наибольшую выручку?",
+      "expected": {
+        "required_tools": ["get_category_sales_ranking"],
+        "assertions": [
+          {"tool": "get_category_sales_ranking", "path": "categories.0.category_name", "operator": "eq", "value": "health_beauty"},
+          {"tool": "get_category_sales_ranking", "path": "categories.0.total_revenue", "operator": "approx", "value": 1233131.72, "tolerance": 0.01}
+        ]
+      }
+    },
+    {
+      "id": "D008",
+      "type": "deterministic",
+      "question": "В каких регионах чаще всего нарушается ожидаемый срок доставки?",
+      "expected": {
+        "required_tools": ["get_region_delivery_ranking"],
+        "assertions": [
+          {"tool": "get_region_delivery_ranking", "path": "regions.0.region", "operator": "eq", "value": "AL"},
+          {"tool": "get_region_delivery_ranking", "path": "regions.0.delayed_percentage", "operator": "approx", "value": 23.9295, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D009",
+      "type": "deterministic",
+      "question": "Какие категории больше всего страдают от задержек доставки?",
+      "expected": {
+        "required_tools": ["get_category_delivery_ranking"],
+        "assertions": [
+          {"tool": "get_category_delivery_ranking", "path": "categories.0.category_name", "operator": "eq", "value": "audio"},
+          {"tool": "get_category_delivery_ranking", "path": "categories.0.delayed_percentage", "operator": "approx", "value": 12.931, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D010",
+      "type": "deterministic",
+      "question": "Есть ли связь между задержкой доставки и оценкой клиента?",
+      "expected": {
+        "required_tools": ["analyze_delivery_rating_relationship"],
+        "assertions": [
+          {"tool": "analyze_delivery_rating_relationship", "path": "delayed_average_score", "operator": "approx", "value": 2.5665, "tolerance": 0.001},
+          {"tool": "analyze_delivery_rating_relationship", "path": "on_time_average_score", "operator": "approx", "value": 4.2937, "tolerance": 0.001},
+          {"tool": "analyze_delivery_rating_relationship", "path": "delay_status_score_correlation", "operator": "approx", "value": -0.3645, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D011",
+      "type": "deterministic",
+      "question": "Какой рейтинг у продавца 4a3ca9315b744ce9f8e9374361493884 и как распределены оценки?",
+      "expected": {
+        "required_tools": ["get_seller_rating"],
+        "assertions": [
+          {"tool": "get_seller_rating", "path": "statistics.average_score", "operator": "approx", "value": 3.8279, "tolerance": 0.001},
+          {"tool": "get_seller_rating", "path": "rating_distribution.score_1", "operator": "eq", "value": 259},
+          {"tool": "get_seller_rating", "path": "rating_distribution.score_5", "operator": "eq", "value": 869}
+        ]
+      }
+    },
+    {
+      "id": "D012",
+      "type": "deterministic",
+      "question": "Какова выручка продавца 4869f7a5dfa277a7dca6462dcf3b52b2?",
+      "expected": {
+        "required_tools": ["get_seller_sales"],
+        "assertions": [
+          {"tool": "get_seller_sales", "path": "total_revenue", "operator": "approx", "value": 226987.93, "tolerance": 0.01}
+        ]
+      }
+    },
+    {
+      "id": "D013",
+      "type": "deterministic",
+      "question": "Какие показатели доставки в регионе AL?",
+      "expected": {
+        "required_tools": ["get_delivery_by_region"],
+        "assertions": [
+          {"tool": "get_delivery_by_region", "path": "total_delivered_orders", "operator": "eq", "value": 397},
+          {"tool": "get_delivery_by_region", "path": "delayed_orders", "operator": "eq", "value": 95}
+        ]
+      }
+    },
+    {
+      "id": "D014",
+      "type": "deterministic",
+      "question": "Какова выручка категории health_beauty?",
+      "expected": {
+        "required_tools": ["get_sales_by_category"],
+        "assertions": [
+          {"tool": "get_sales_by_category", "path": "total_revenue", "operator": "approx", "value": 1233131.72, "tolerance": 0.01},
+          {"tool": "get_sales_by_category", "path": "total_orders", "operator": "eq", "value": 8647}
+        ]
+      }
+    },
+    {
+      "id": "D015",
+      "type": "deterministic",
+      "question": "Какой средний рейтинг по всему магазину?",
+      "expected": {
+        "required_tools": ["get_review_statistics"],
+        "assertions": [
+          {"tool": "get_review_statistics", "path": "average_score", "operator": "approx", "value": 4.0864, "tolerance": 0.001}
+        ]
+      }
+    },
+    {
+      "id": "D016",
+      "type": "deterministic",
+      "question": "Покажи 10 последних негативных отзывов продавца 4a3ca9315b744ce9f8e9374361493884.",
+      "expected": {
+        "required_tools": ["get_seller_negative_reviews"],
+        "assertions": [
+          {"tool": "get_seller_negative_reviews", "path": "requested_limit", "operator": "eq", "value": 10},
+          {"tool": "get_seller_negative_reviews", "path": "count", "operator": "eq", "value": 10}
+        ]
+      }
+    },
+    {
+      "id": "R001",
+      "type": "research",
+      "question": "Какие продавцы имеют высокий объём продаж, но проблемы с клиентским опытом?",
+      "expected": {
+        "required_tools": ["find_high_sales_low_rating_sellers"],
+        "forbidden_tools": ["get_seller_sales", "get_seller_rating"]
+      }
+    },
+    {
+      "id": "R002",
+      "type": "research",
+      "question": "Почему у продавца 4a3ca9315b744ce9f8e9374361493884 низкий рейтинг? Проверь количество и структуру заказов, сроки доставки, распределение отзывов, сравнение со средними и связь задержек с оценками.",
+      "expected": {
+        "required_tools": ["get_seller_sales", "get_seller_catalog", "get_seller_delivery_performance", "get_seller_rating", "get_review_statistics", "analyze_delivery_rating_relationship", "get_seller_negative_reviews"]
+      }
+    },
+    {
+      "id": "R003",
+      "type": "research",
+      "question": "Проведи комплексный анализ продавца 3504c0cb71d7fa48d967e0e4c94d59d9: ассортимент, продажи, доставка и отзывы.",
+      "expected": {
+        "required_tools": ["get_seller_catalog", "get_seller_sales", "get_seller_delivery_performance", "get_seller_rating"]
+      }
+    },
+    {
+      "id": "R004",
+      "type": "research",
+      "question": "Сравни продажи продавцов 3504c0cb71d7fa48d967e0e4c94d59d9 и 4a3ca9315b744ce9f8e9374361493884.",
+      "expected": {
+        "required_tools": ["compare_sellers"]
+      }
+    },
+    {
+      "id": "R005",
+      "type": "research",
+      "question": "Сравни продажи и клиентские оценки категории health_beauty.",
+      "expected": {
+        "required_tools": ["get_sales_by_category", "get_category_rating"]
+      }
+    },
+    {
+      "id": "R006",
+      "type": "research",
+      "question": "Объясни, насколько сильно задержки доставки связаны с плохими оценками клиентов.",
+      "expected": {
+        "required_tools": ["analyze_delivery_rating_relationship"]
+      }
+    },
+    {
+      "id": "R007",
+      "type": "research",
+      "question": "Сравни доставку продавца 4a3ca9315b744ce9f8e9374361493884 с общими показателями магазина.",
+      "expected": {
+        "required_tools": ["get_seller_delivery_performance", "get_delivery_statistics"]
+      }
+    },
+    {
+      "id": "R008",
+      "type": "research",
+      "question": "Категория audio лидирует по доле задержек. Проверь её задержки и клиентский рейтинг.",
+      "expected": {
+        "required_tools": ["get_category_delivery_ranking", "get_category_rating"]
+      }
+    },
+    {
+      "id": "R009",
+      "type": "research",
+      "question": "Проведи анализ ассортимента и самых продаваемых товаров продавца 3504c0cb71d7fa48d967e0e4c94d59d9.",
+      "expected": {
+        "required_tools": ["get_seller_catalog", "get_seller_top_products"]
+      }
+    }
+  ]
+}

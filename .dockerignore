@@ -1,0 +1,33 @@
+# Секреты нельзя помещать внутрь Docker-образа
+.env
+
+# Локальное виртуальное окружение не нужно контейнеру
+venv/
+venv_broken/
+
+# Кэш Python
+**/__pycache__/
+*.py[cod]
+
+# Настройки редакторов
+.vscode/
+.idea/
+
+# Служебные файлы Git
+.git/
+.gitignore
+
+# Кэши инструментов разработки
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# CSV не помещаем в образ — подключим их отдельным volume
+data/raw/
+
+# Отчёты evaluation не нужны работающему приложению
+evaluation/reports/
+
+# Техническое задание не нужно внутри контейнера
+Project.docx
+~$*.docx

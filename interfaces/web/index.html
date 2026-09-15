@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Интерфейс мультиагентного анализа данных Olist">
+  <title>Olist Intelligence</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar glass-panel">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">O</span>
+        <div>
+          <p class="eyebrow">MULTI-AGENT ANALYTICS</p>
+          <h1>Olist Intelligence</h1>
+        </div>
+      </div>
+      <div class="system-status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>LLM · PostgreSQL · MCP</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="example-panel" aria-labelledby="examples-title">
+        <div class="example-heading">
+          <div>
+            <p class="section-label">Примеры исследований</p>
+            <h2 id="examples-title">Начните с готового вопроса</h2>
+          </div>
+          <p>Нажмите на пример — он появится в поле запроса.</p>
+        </div>
+
+        <div class="example-grid">
+          <button class="example-card" type="button" data-question="Какие категории дают наибольшую выручку?">
+            <span class="example-icon" aria-hidden="true">↗</span>
+            <span>Какие категории дают наибольшую выручку?</span>
+          </button>
+          <button class="example-card" type="button" data-question="В каких регионах чаще всего нарушается ожидаемый срок доставки?">
+            <span class="example-icon" aria-hidden="true">⌁</span>
+            <span>В каких регионах чаще нарушается срок доставки?</span>
+          </button>
+          <button class="example-card" type="button" data-question="Есть ли связь между задержкой доставки и оценкой клиента?">
+            <span class="example-icon" aria-hidden="true">◎</span>
+            <span>Есть ли связь между задержкой и оценкой клиента?</span>
+          </button>
+          <button class="example-card" type="button" data-question="Какие продавцы имеют высокий объём продаж, но проблемы с клиентским опытом?">
+            <span class="example-icon" aria-hidden="true">◇</span>
+            <span>Кто много продаёт, но имеет проблемы с клиентским опытом?</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="chat-panel" aria-labelledby="chat-title">
+        <div class="chat-heading">
+          <div>
+            <p class="section-label">Диалог с системой</p>
+            <h2 id="chat-title">Исследование</h2>
+          </div>
+          <button id="new-chat-button" class="secondary-button" type="button">
+            Новый диалог
+          </button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages" aria-live="polite">
+          <article id="welcome-message" class="message-row assistant-row">
+            <div class="message-avatar" aria-hidden="true">AI</div>
+            <div class="message-bubble assistant-bubble">
+              <strong>Задайте бизнес-вопрос</strong>
+              <p>Я выберу нужных агентов, соберу Evidence и объясню вывод. После ответа можно задать уточняющий вопрос.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="loading-panel" class="loading-panel" hidden aria-live="polite">
+        <div class="loading-line"><span></span></div>
+        <div>
+          <strong>Агенты исследуют вопрос</strong>
+          <p>Оркестратор последовательно выбирает инструменты и проверяет достаточность данных.</p>
+        </div>
+      </section>
+
+      <section id="error-panel" class="error-panel" hidden role="alert">
+        <strong>Исследование не запустилось</strong>
+        <p id="error-message"></p>
+      </section>
+
+      <section class="query-panel composer-panel" aria-labelledby="query-title">
+        <form id="question-form">
+          <label id="query-title" for="question">Продолжить диалог</label>
+          <textarea
+            id="question"
+            name="question"
+            rows="2"
+            maxlength="2000"
+            placeholder="Задайте вопрос или уточните предыдущий ответ…"
+            required
+          ></textarea>
+          <div class="form-footer">
+            <span class="hint">Enter — отправить, Shift+Enter — новая строка.</span>
+            <button id="submit-button" type="submit">
+              <span class="button-label">Отправить</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

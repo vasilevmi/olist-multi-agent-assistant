@@ -27,3 +27,6 @@ Thumbs.db
 
 # Логи
 *.log
+
+Project.docx
+~$*.docx

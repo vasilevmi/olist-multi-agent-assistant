@@ -1,157 +1,234 @@
-"""Сценарий выполнения исследования."""
+"""Сценарий исследования вопроса через LangChain-агентов."""
 
-import logging
+import json
+from typing import Any
 
-from application.investigate.ports import (
-    AgentExecutor,
-    InvestigationAnalyst,
-    InvestigationPlanner,
-)
-from domain.investigation.entities import Investigation
+from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.runnables import Runnable, RunnableConfig
+
+from domain.investigation.entities import ConfidenceLevel, Investigation
+from infrastructure.agents.evidence_critic import CriticResponse
 
 
-logger = logging.getLogger(__name__)
+DELEGATION_AGENTS = {
+    "ask_sales_agent": "sales_agent",
+    "ask_seller_agent": "seller_agent",
+    "ask_delivery_agent": "delivery_agent",
+    "ask_reviews_agent": "reviews_agent",
+}
+
+
+def _as_dictionary(value: Any) -> dict[str, Any]:
+    """Преобразовать JSON-ответ инструмента в обычный словарь."""
+
+    if isinstance(value, dict):
+        return value
+
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {"value": value}
+
+        if isinstance(parsed, dict):
+            return parsed
+
+        return {"value": parsed}
+
+    return {"value": value}
+
+
+def _find_delegation_calls(messages: list[Any]) -> dict[str, dict[str, Any]]:
+    """Связать ID вызова delegation tool с его именем и аргументами."""
+
+    calls: dict[str, dict[str, Any]] = {}
+
+    for message in messages:
+        if not isinstance(message, AIMessage):
+            continue
+
+        for tool_call in message.tool_calls:
+            call_id = tool_call.get("id")
+            if isinstance(call_id, str):
+                calls[call_id] = tool_call
+
+    return calls
 
 
 class InvestigateQuestion:
-    """Последовательно планировать шаги и собирать факты."""
+    """Выполнить исследование и вернуть доменный объект Investigation."""
 
     def __init__(
         self,
-        planner: InvestigationPlanner,
-        executor: AgentExecutor,
-        analyst: InvestigationAnalyst,
-        max_steps: int = 10,
+        orchestrator: Runnable,
+        critic: Runnable,
     ) -> None:
-        if max_steps < 1:
-            raise ValueError("max_steps должен быть больше нуля")
+        self.orchestrator = orchestrator
+        self.critic = critic
 
-        self.planner = planner
-        self.executor = executor
-        self.analyst = analyst
-        self.max_steps = max_steps
-
-    def execute(self, question: str) -> Investigation:
-        """Выполнять по одному шагу, пока данных не станет достаточно."""
+    async def execute(
+        self,
+        question: str,
+        *,
+        history: list[dict[str, str]] | None = None,
+        config: RunnableConfig | None = None,
+    ) -> Investigation:
+        """Запустить Orchestrator, собрать Evidence и вызвать Critic."""
 
         investigation = Investigation(question=question)
         investigation.start()
         limitations: list[str] = []
 
-        for _ in range(self.max_steps):
-            try:
-                decision = self.planner.decide_next_step(
-                    question=investigation.question,
-                    evidence=investigation.evidence,
-                    completed_steps=investigation.steps,
-                )
-            except Exception as error:
-                if investigation.evidence:
-                    limitations.append(
-                        "Не удалось спланировать дополнительный шаг: "
-                        f"{error}"
-                    )
-                    logger.warning(limitations[-1])
-                    break
-
-                investigation.fail(
-                    f"Не удалось спланировать следующий шаг: {error}"
-                )
-                return investigation
-
-            logger.info(
-                "Решение оркестратора: complete=%s; reason=%s",
-                decision.is_complete,
-                decision.reason,
-            )
-
-            if decision.is_complete:
-                if not investigation.evidence:
-                    investigation.fail(
-                        "Планировщик завершил исследование без Evidence"
-                    )
-                    return investigation
-
-                break
-
-            planned_step = decision.next_step
-
-            if planned_step is None:
-                investigation.fail(
-                    "Планировщик не указал следующий шаг"
-                )
-                return investigation
-
-            step = investigation.add_step(
-                description=planned_step.description,
-                agent_name=planned_step.agent_name,
-                tool_name=planned_step.tool_name,
-                arguments=planned_step.arguments,
-            )
-
-            logger.info(
-                "Выполняется %s.%s",
-                step.agent_name,
-                step.tool_name,
-            )
-
-            step.start()
-
-            try:
-                result = self.executor.execute(
-                    agent_name=step.agent_name,
-                    task=step.description,
-                    tool_name=step.tool_name or "",
-                    arguments=step.arguments,
-                )
-            except Exception as error:
-                step.fail(str(error))
-                limitations.append(
-                    f"Не удалось выполнить шаг «{step.description}»: {error}"
-                )
-                logger.warning(limitations[-1])
-                continue
-
-            step.complete(result)
-
-            investigation.add_evidence(
-                source=step.agent_name,
-                tool_name=step.tool_name or "unknown",
-                data=result,
-            )
-        else:
-            if not investigation.evidence:
-                investigation.fail(
-                    f"Исследование достигло ограничения в {self.max_steps} шагов"
-                )
-                return investigation
-
-            limitations.append(
-                f"Исследование достигло ограничения в {self.max_steps} шагов"
-            )
+        input_messages: list[dict[str, str]] = list(history or [])
+        input_messages.append(
+            {"role": "user", "content": investigation.question}
+        )
 
         try:
-            analysis = self.analyst.analyze(
-                question=investigation.question,
-                evidence=investigation.evidence,
-                limitations=limitations,
+            orchestration_result = await self.orchestrator.ainvoke(
+                {"messages": input_messages},
+                config=config,
             )
         except Exception as error:
             investigation.fail(
-                f"Не удалось проанализировать данные: {error}"
+                f"Не удалось выполнить исследование: {error}"
             )
             return investigation
 
-        for proposed_finding in analysis.findings:
+        messages = orchestration_result.get("messages", [])
+        delegation_calls = _find_delegation_calls(messages)
+
+        for message in messages:
+            if not isinstance(message, ToolMessage):
+                continue
+
+            delegation_name = message.name or ""
+            if delegation_name not in DELEGATION_AGENTS:
+                continue
+
+            call = delegation_calls.get(message.tool_call_id, {})
+            arguments = call.get("args", {})
+            if not isinstance(arguments, dict):
+                arguments = {}
+
+            task = arguments.get("task")
+            if not isinstance(task, str) or not task.strip():
+                task = f"Задача для {delegation_name}"
+
+            agent_name = DELEGATION_AGENTS[delegation_name]
+            delegation_result = _as_dictionary(message.content)
+            raw_evidence = delegation_result.get("evidence", [])
+
+            if not isinstance(raw_evidence, list) or not raw_evidence:
+                limitations.append(
+                    f"{agent_name} не вернул результатов MCP-инструментов"
+                )
+                continue
+
+            for raw_item in raw_evidence:
+                if not isinstance(raw_item, dict):
+                    continue
+
+                tool_name = str(raw_item.get("tool_name") or "unknown")
+                tool_status = str(raw_item.get("status") or "success")
+                tool_data = _as_dictionary(raw_item.get("content"))
+                tool_arguments = raw_item.get("arguments", {})
+                if not isinstance(tool_arguments, dict):
+                    tool_arguments = {}
+
+                step = investigation.add_step(
+                    description=task,
+                    agent_name=agent_name,
+                    tool_name=tool_name,
+                    arguments=tool_arguments,
+                )
+                step.start()
+
+                if tool_status == "error":
+                    error_message = str(
+                        tool_data.get("value", "MCP-инструмент вернул ошибку")
+                    )
+                    step.fail(error_message)
+                    limitations.append(
+                        f"Не удалось выполнить {tool_name}: {error_message}"
+                    )
+                    continue
+
+                step.complete(tool_data)
+                investigation.add_evidence(
+                    source=agent_name,
+                    tool_name=tool_name,
+                    data=tool_data,
+                )
+
+        if not investigation.evidence:
+            investigation.fail(
+                "Orchestrator не получил Evidence от MCP-инструментов"
+            )
+            return investigation
+
+        critic_input = {
+            "question": investigation.question,
+            "evidence": [
+                {
+                    "evidence_id": item.evidence_id,
+                    "source": item.source,
+                    "tool_name": item.tool_name,
+                    "data": item.data,
+                }
+                for item in investigation.evidence
+            ],
+            "limitations": limitations,
+        }
+
+        try:
+            critic_result = await self.critic.ainvoke(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": json.dumps(
+                                critic_input,
+                                ensure_ascii=False,
+                                default=str,
+                            ),
+                        }
+                    ]
+                },
+                config=config,
+            )
+            analysis = critic_result.get("structured_response")
+            if not isinstance(analysis, CriticResponse):
+                raise TypeError("Critic не вернул CriticResponse")
+        except Exception as error:
+            investigation.fail(
+                f"Не удалось проверить собранные Evidence: {error}"
+            )
+            return investigation
+
+        known_evidence_ids = {
+            item.evidence_id for item in investigation.evidence
+        }
+
+        for finding in analysis.findings:
+            valid_ids = [
+                evidence_id
+                for evidence_id in finding.evidence_ids
+                if evidence_id in known_evidence_ids
+            ]
+
+            if not finding.is_hypothesis and not valid_ids:
+                continue
+
             investigation.add_finding(
-                statement=proposed_finding.statement,
-                evidence_ids=proposed_finding.evidence_ids,
-                confidence=proposed_finding.confidence,
-                is_hypothesis=proposed_finding.is_hypothesis,
+                statement=finding.statement,
+                evidence_ids=valid_ids,
+                confidence=ConfidenceLevel(finding.confidence),
+                is_hypothesis=finding.is_hypothesis,
             )
 
         investigation.complete(
-            final_answer=analysis.final_answer,
+            final_answer=analysis.short_summary,
             short_summary=analysis.short_summary,
             main_factors=analysis.main_factors,
             conclusion=analysis.conclusion,

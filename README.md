@@ -1,9 +1,9 @@
 # Мультиагентный аналитический ассистент Olist
 
 Проект анализирует данные бразильского маркетплейса Olist на естественном
-языке. Пользователь задаёт бизнес-вопрос, оркестратор строит план исследования,
-специализированные агенты вызывают подходящие MCP-инструменты, а Critic
-формирует итоговый ответ только на основании собранных Evidence.
+языке. Пользователь задаёт бизнес-вопрос, LangChain Orchestrator делегирует
+подзадачи специализированным агентам, они вызывают подходящие MCP-инструменты,
+а Critic формирует итоговый ответ только на основании собранных Evidence.
 
 ## Что умеет система
 
@@ -13,8 +13,9 @@
 - исследовать сроки доставки, задержки и регионы;
 - анализировать рейтинги, негативные отзывы и клиентский опыт;
 - проверять связь задержек доставки с оценками покупателей;
-- показывать план, выполненные шаги, Evidence, факты, гипотезы и уверенность;
-- собирать метрики количества LLM- и MCP-вызовов и времени выполнения.
+- показывать выполненные шаги, Evidence, факты, гипотезы и уверенность;
+- сохранять полную трассировку LLM- и MCP-вызовов в Langfuse;
+- проверять качество ответов на контрольном наборе через DeepEval.
 
 ## Архитектура
 
@@ -25,37 +26,38 @@ HTTP API / веб-интерфейс
     ↓
 InvestigateQuestion
     ↓
-LLM Orchestrator ── строит план и выбирает агента с инструментом
-    ↓
-MultiAgentExecutor
-    ├── Sales Agent
-    ├── Seller Agent
-    ├── Delivery Agent
-    └── Reviews Agent
-             ↓
-        MCP-инструменты
-             ↓
-          Use Cases
-             ↓
-        PostgreSQL repositories
-             ↓
-           PostgreSQL
-             ↓
-          Evidence
-             ↓
-      Critic / Evidence Agent
-             ↓
-  факты, гипотезы и итоговый ответ
+LangChain Orchestrator
+    ├── ask_sales_agent ───→ Sales Agent
+    ├── ask_seller_agent ──→ Seller Agent
+    ├── ask_delivery_agent → Delivery Agent
+    └── ask_reviews_agent ─→ Reviews Agent
+                              ↓
+                      LangChain MCP adapter
+                              ↓
+                       FastMCP-инструменты
+                              ↓
+                           Use Cases
+                              ↓
+                    PostgreSQL repositories
+                              ↓
+                         PostgreSQL
+                              ↓
+                           Evidence
+                              ↓
+                    Critic / Evidence Agent
+                              ↓
+              факты, гипотезы и итоговый ответ
 ```
 
 Проект разделён на слои:
 
 - `domain/` — бизнес-сущности и интерфейсы репозиториев;
-- `application/` — сценарии использования и порты;
+- `application/` — сценарии использования;
 - `infrastructure/postgres/` — SQL и реализации репозиториев;
 - `infrastructure/mcp/` — MCP-инструменты;
 - `infrastructure/agents/` — оркестратор и специализированные агенты;
-- `infrastructure/llm/` — клиент OpenAI-совместимой LLM;
+- `infrastructure/llm/` — создание OpenAI-совместимой модели LangChain;
+- `infrastructure/observability/` — интеграция Langfuse и метрики времени;
 - `interfaces/api/` — HTTP API;
 - `interfaces/web/` — веб-интерфейс;
 - `evaluation/` — контрольные кейсы, метрики и отчёты.
@@ -326,59 +328,56 @@ Content-Type: application/json
 
 ## Запуск из консоли
 
-Демонстрационный сценарий для заданного в скрипте продавца:
+Консольный запуск исследования:
 
 ```powershell
 py -m scripts.run_investigation
 ```
 
-Он выводит план, результаты шагов, Evidence, факты, гипотезы, итоговый ответ
-и метрики выполнения.
+Он выводит результаты шагов, Evidence, факты, гипотезы и итоговый ответ.
 
 ## Evaluation
 
 Контрольный набор содержит 25 бизнес-кейсов:
 
-- 16 детерминированных кейсов с заранее рассчитанными SQL-ответами;
-- 9 исследовательских кейсов с проверкой инструментов, Evidence и структуры
-  ответа.
+- 16 детерминированных кейсов с ожидаемыми инструментами и фактами;
+- 9 исследовательских кейсов с проверкой полноты, Evidence и гипотез.
 
-Показать список кейсов без обращения к LLM:
-
-```powershell
-py -m evaluation.run_evaluation --list
-```
+Все проверки выполняются через DeepEval. Он оценивает выбор инструментов,
+релевантность ответа, соответствие Evidence, бизнес-корректность и качество
+исследовательского анализа.
 
 Запустить один кейс:
 
 ```powershell
-py -m evaluation.run_evaluation --case-id D001
+deepeval test run evaluation/deepeval_suite/test_agents.py -k D001
 ```
 
-Запустить весь набор и сохранить отчёт:
+Запустить только исследовательские кейсы:
 
 ```powershell
-py -m evaluation.run_evaluation --output evaluation/reports/full_evaluation.json
+deepeval test run evaluation/deepeval_suite/test_agents.py -m research
 ```
 
-Последний полный прогон на DeepSeek:
+Запустить весь набор с автоматической записью структурированного отчёта:
 
-| Метрика | Результат |
-|---|---:|
-| Успешные кейсы | 24 из 25 |
-| Case success rate | 96% |
-| Factual accuracy | 100% |
-| Average evidence coverage | 100% |
-| Tool selection error rate | 0% |
-| Evidence grounding rate | 96% |
-| Structured answer rate | 96% |
-| Average tool calls | 1.72 |
-| Average LLM calls | 5.44 |
-| Average latency | 37.17 сек. |
+```powershell
+python -m evaluation.run_deepeval
+```
 
-Подробное описание расчёта показателей находится в
-[`evaluation/METRICS.md`](evaluation/METRICS.md), а последний отчёт — в
-[`evaluation/reports/deepseek_full.json`](evaluation/reports/deepseek_full.json).
+Подробная инструкция находится в [`evaluation/README.md`](evaluation/README.md),
+а описание метрик — в [`evaluation/METRICS.md`](evaluation/METRICS.md).
+Актуальные отчёты сохраняются в `evaluation/reports/deepeval_results.json`
+и `evaluation/reports/deepeval_results.md`.
+
+## Основные технологии
+
+- **LangChain** — агентные циклы, инструменты, сообщения и структурированный ответ;
+- **FastMCP** — контролируемые инструменты доступа к бизнес-операциям;
+- **LangChain MCP Adapters** — преобразование MCP-инструментов в LangChain Tools;
+- **Langfuse** — трассировка полного пути запроса;
+- **DeepEval** — автоматическая оценка ответов на контрольном наборе;
+- **PostgreSQL** — хранение и аналитическая обработка данных Olist.
 
 ## Известные ограничения
 

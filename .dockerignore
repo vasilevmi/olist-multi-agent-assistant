@@ -4,6 +4,7 @@
 # Локальное виртуальное окружение не нужно контейнеру
 venv/
 venv_broken/
+venv_old/
 
 # Кэш Python
 **/__pycache__/
@@ -21,6 +22,7 @@ venv_broken/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.deepeval/
 
 # CSV не помещаем в образ — подключим их отдельным volume
 data/raw/

@@ -12,6 +12,15 @@ const exampleCards = document.querySelectorAll(".example-card");
 
 const conversationHistory = [];
 const MAX_HISTORY_MESSAGES = 10;
+let conversationSessionId = createSessionId();
+
+function createSessionId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -312,7 +321,11 @@ async function sendQuestion(question) {
     const response = await fetch("/api/investigations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: previousHistory }),
+      body: JSON.stringify({
+        question,
+        history: previousHistory,
+        session_id: conversationSessionId,
+      }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Сервер вернул ошибку");
@@ -349,6 +362,7 @@ questionInput.addEventListener("keydown", (event) => {
 
 newChatButton.addEventListener("click", () => {
   conversationHistory.length = 0;
+  conversationSessionId = createSessionId();
   chatMessages.querySelectorAll(".message-row:not(#welcome-message)").forEach((message) => message.remove());
   welcomeMessage.hidden = false;
   errorPanel.hidden = true;

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
@@ -124,7 +124,7 @@ get_top_sellers_use_case = GetTopSellers(repository)
 compare_sellers_use_case = CompareSellers(repository)
 
 # Создаём MCP-сервер.
-mcp = MCPServer("Sales MCP")
+mcp = FastMCP("Sales MCP", log_level="WARNING")
 
 
 @mcp.tool()

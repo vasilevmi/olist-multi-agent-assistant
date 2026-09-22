@@ -2,9 +2,9 @@
 
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Mount, Route
@@ -53,17 +53,22 @@ async def create_investigation(request: Request) -> JSONResponse:
             status_code=400,
         )
 
+    try:
+        session_id = parse_session_id(payload.get("session_id"))
+    except ValueError as error:
+        return JSONResponse(
+            {"error": str(error)},
+            status_code=400,
+        )
+
     display_question = question.strip()
-    contextual_question = build_contextual_question(
-        question=display_question,
-        history=history,
-    )
 
     try:
-        runtime = create_investigation_runtime()
-        investigation = await run_in_threadpool(
-            runtime.use_case.execute,
-            contextual_question,
+        runtime = await create_investigation_runtime()
+        investigation = await runtime.use_case.execute(
+            display_question,
+            session_id=session_id,
+            history=history,
         )
         runtime.metrics.finish()
     except Exception as error:
@@ -77,8 +82,26 @@ async def create_investigation(request: Request) -> JSONResponse:
             investigation=investigation,
             metrics=runtime.metrics,
             display_question=display_question,
+            session_id=session_id,
         )
     )
+
+
+def parse_session_id(value: Any) -> str:
+    """Проверить идентификатор диалога или создать новый."""
+
+    if value is None:
+        return str(uuid4())
+    if not isinstance(value, str):
+        raise ValueError("Поле session_id должно быть строкой")
+
+    session_id = value.strip()
+    if not session_id:
+        raise ValueError("Поле session_id не должно быть пустым")
+    if len(session_id) > 200:
+        raise ValueError("Поле session_id не должно быть длиннее 200 символов")
+
+    return session_id
 
 
 def parse_history(history: Any) -> list[dict[str, str]]:
@@ -115,35 +138,16 @@ def parse_history(history: Any) -> list[dict[str, str]]:
     return parsed
 
 
-def build_contextual_question(
-    question: str,
-    history: list[dict[str, str]],
-) -> str:
-    """Добавить историю для понимания ссылок в новом вопросе."""
-
-    if not history:
-        return question
-
-    history_text = "\n".join(
-        f"{message['role']}: {message['content']}"
-        for message in history
-    )
-    return (
-        "Используй историю диалога только как контекст для текущего вопроса. "
-        "Не повторяй предыдущий ответ, если пользователь об этом не просит.\n\n"
-        f"История диалога:\n{history_text}\n\n"
-        f"Текущий вопрос пользователя:\n{question}"
-    )
-
-
 def serialize_investigation(
     investigation: Investigation,
     metrics: RunMetrics,
     display_question: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Преобразовать доменные сущности в ответ HTTP API."""
 
     return {
+        "session_id": session_id,
         "investigation_id": investigation.investigation_id,
         "question": display_question or investigation.question,
         "status": investigation.status.value,

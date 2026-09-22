@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
@@ -235,7 +235,7 @@ analyze_delivery_rating_use_case = AnalyzeDeliveryRatingRelationship(
     repository
 )
 
-mcp = MCPServer("Reviews MCP")
+mcp = FastMCP("Reviews MCP", log_level="WARNING")
 
 
 @mcp.tool()

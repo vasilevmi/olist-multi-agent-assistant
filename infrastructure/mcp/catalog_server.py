@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
@@ -110,7 +110,7 @@ get_category_use_case = GetCategory(repository)
 get_category_products_use_case = GetCategoryProducts(repository)
 get_product_statistics_use_case = GetProductStatistics(repository)
 
-mcp = MCPServer("Catalog MCP")
+mcp = FastMCP("Catalog MCP", log_level="WARNING")
 
 
 @mcp.tool()

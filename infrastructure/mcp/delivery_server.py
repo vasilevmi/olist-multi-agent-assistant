@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-from mcp.server import MCPServer
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
 from sqlalchemy import create_engine
 
@@ -166,7 +166,7 @@ get_category_delivery_ranking_use_case = GetCategoryDeliveryRanking(
 )
 get_region_delivery_ranking_use_case = GetRegionDeliveryRanking(repository)
 
-mcp = MCPServer("Delivery MCP")
+mcp = FastMCP("Delivery MCP", log_level="WARNING")
 
 
 def _to_delivery_result(delivery: Delivery) -> DeliveryResult:
